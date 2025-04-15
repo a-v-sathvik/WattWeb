@@ -1,11 +1,242 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🌈 Advanced Pomodoro Timer</title>
+  <style>
+    :root {
+      --accent: #ff4d6d;
+      --light-bg: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+      --dark-bg: linear-gradient(135deg, #1f1c2c 0%, #928dab 100%);
+      --light-text: #2e2e2e;
+      --dark-text: #f1f1f1;
+      --btn-light: #ff6f61;
+      --btn-dark: #6a0572;
+      --glow-light: #fcb69f;
+      --glow-dark: #928dab;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      transition: background 0.6s ease, color 0.6s ease;
+      background: var(--light-bg);
+      color: var(--light-text);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    body.dark {
+      background: var(--dark-bg);
+      color: var(--dark-text);
+    }
+
+    .container {
+      text-align: center;
+      padding: 2rem;
+      border-radius: 1rem;
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      background: linear-gradient(to right, #ff758c, #ff7eb3);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .progress-container {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: 10px solid rgba(255,255,255,0.2);
+      margin: 0 auto 1.5rem auto;
+      position: relative;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+
+    .progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: 10px solid transparent;
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+      transform: rotate(-90deg);
+      transition: stroke-dashoffset 0.4s ease;
+    }
+
+    .timer {
+      font-size: 3rem;
+      font-weight: bold;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .controls button {
+      font-size: 1rem;
+      margin: 0.5rem;
+      padding: 0.8rem 1.4rem;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      background: var(--btn-light);
+      color: white;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+
+    body.dark .controls button {
+      background: var(--btn-dark);
+    }
+
+    .controls button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 10px rgba(255,255,255,0.3);
+    }
+
+    .mode-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 0.6rem 1.2rem;
+      border: 2px solid white;
+      background: none;
+      color: white;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      z-index: 10;
+    }
+
+    .emoji {
+      font-size: 3rem;
+      margin-top: 1.5rem;
+      cursor: pointer;
+      animation: float 2.5s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 2rem; }
+      .timer { font-size: 2rem; }
+    }
+  </style>
 </head>
 <body>
-    <h1>hello world</h1>
+  <button class="mode-toggle" id="toggleMode">🌙</button>
+
+  <div class="container">
+    <h1>Pomodoro Timer</h1>
+    <div class="progress-container">
+      <div class="progress" id="progressCircle"></div>
+      <div class="timer" id="timer">25:00</div>
+    </div>
+    <div class="controls">
+      <button onclick="startTimer()">Start</button>
+      <button onclick="resetTimer()">Reset</button>
+    </div>
+    <div id="sessionInfo">Session 1 of 4</div>
+    <div class="emoji" id="emoji">🍅</div>
+  </div>
+
+  <audio id="beep" src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" preload="auto"></audio>
+
+  <script>
+    let isDark = false;
+    const toggleBtn = document.getElementById('toggleMode');
+    const timerDisplay = document.getElementById('timer');
+    const progress = document.getElementById('progressCircle');
+    const emoji = document.getElementById('emoji');
+    const beep = document.getElementById('beep');
+    const sessionInfo = document.getElementById('sessionInfo');
+
+    let timer;
+    let running = false;
+    let workTime = 25 * 60;
+    let shortBreak = 5 * 60;
+    let longBreak = 15 * 60;
+    let current = workTime;
+    let sessionCount = 0;
+    let isBreak = false;
+
+    function updateDisplay() {
+      const minutes = String(Math.floor(current / 60)).padStart(2, '0');
+      const seconds = String(current % 60).padStart(2, '0');
+      timerDisplay.textContent = `${minutes}:${seconds}`;
+
+      const progressPercent = 1 - current / (isBreak ? (sessionCount === 4 ? longBreak : shortBreak) : workTime);
+      progress.style.background = `conic-gradient(var(--accent) ${progressPercent * 360}deg, transparent 0deg)`;
+    }
+
+    function startTimer() {
+      if (running) return;
+      running = true;
+      timer = setInterval(() => {
+        current--;
+        updateDisplay();
+        if (current <= 0) {
+          clearInterval(timer);
+          beep.play();
+          running = false;
+          sessionCount = isBreak ? sessionCount : sessionCount + 1;
+          isBreak = !isBreak;
+
+          if (sessionCount > 4) sessionCount = 1;
+
+          current = isBreak
+            ? (sessionCount === 4 ? longBreak : shortBreak)
+            : workTime;
+
+          sessionInfo.textContent = isBreak
+            ? (sessionCount === 4 ? "Long Break 🌴" : `Short Break ☕`)
+            : `Session ${sessionCount} of 4`;
+
+          emoji.textContent = isBreak ? "☕" : "🍅";
+
+          setTimeout(startTimer, 1000);
+        }
+      }, 1000);
+    }
+
+    function resetTimer() {
+      clearInterval(timer);
+      running = false;
+      sessionCount = 0;
+      current = workTime;
+      isBreak = false;
+      emoji.textContent = "🍅";
+      sessionInfo.textContent = `Session 1 of 4`;
+      updateDisplay();
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      isDark = !isDark;
+      document.body.classList.toggle('dark', isDark);
+      toggleBtn.textContent = isDark ? "☀️" : "🌙";
+    });
+
+    emoji.addEventListener('click', () => {
+      emoji.textContent = emoji.textContent === "🍅" ? "😄" : "🍅";
+    });
+
+    updateDisplay(); // Initial
+  </script>
 </body>
 </html>
